@@ -1,0 +1,90 @@
+---
+title: 'Part 2: chi-square with lizards'' tails'
+author: "Katie Pietrucha"
+date: "11/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(broom)
+```
+
+## Read in data
+```{r}
+lizards <- read_csv(here("data", "lizards.csv"))
+```
+
+Get counts of lizards by species
+```{r}
+lizards %>%
+  count(spp) %>%
+  arrange(-n) # order in decreasing order by count
+```
+
+## Make a subset
+
+Keep:
+- UTST lizards
+- sites: IBPE (enclosure grassland), RABB (rabbit mesquite site), EAST (east tarbush site)
+- tail condition is recorded (W = whole, B = broken)
+
+```{r}
+utst <- lizards %>%
+  filter(spp == "UTST") %>%
+  filter(site %in% c("IBPE", "RABB", "EAST")) %>%
+  filter(tail %in% c("B", "W"))
+```
+
+## Find counts and proportions of lizards with broken or whole tails at each site.
+
+```{r}
+utst %>%
+  count(site, tail) # but it's a long table
+```
+
+```{r}
+tail_counts <- utst %>%
+  janitor::tabyl(site, tail) # gets close to contingency table format
+
+tail_proportions <- tail_counts %>%
+  janitor::adorn_percentages() %>% # default is to calculate proportions by rows
+  janitor::adorn_pct_formatting(digits = 2) %>%
+  janitor::adorn_ns() # adds counts to percentages, great for communication
+```
+ 
+Is there a significant difference in these propprtions? Chi-square will answer. But nice to have counts and percentages reported together use janitor package stuff.
+
+Do I have enough evidence to reject null hypothesis that tail breakage is independent of site?
+
+## Convert to a contingency table
+
+Use `colume_to_rowname()` to convert site column into row names so thats counts are the only data in the table.
+
+```{r}
+lizard_ct <- tail_counts %>% 
+  column_to_rownames(var = "site")
+```
+
+## Chi-square
+
+Are tail breakage and site truly independent? (would expect similar proportions)
+
+```{r}
+lizard_x2 <- chisq.test(lizard_ct)
+lizard_x2
+
+lizard_tidy <- broom::tidy(lizard_x2) # tidy data fram to call components from for in line referencing.
+```
+
+Degrees of freedom for chi-square = (number of rows - 1) * (number of columns - 1)
+
+Yes, we have sufficient evidence to reject null hypothesis of independence. Retain alt hypothesis that  site and tail breakage are not independent.There is a significant association between site and tail breakage. 
+
+Using inline referencing:
+
+There is a significant association (i.e. non-independence) between site and lizard tail breakage ($\chi$^2^(`r lizard_tidy$parameter`)) = `r lizard_tidy$statistic`, *p* = `r lizard_tidy$p.value`).
